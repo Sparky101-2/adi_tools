@@ -923,6 +923,14 @@ def startup_banner(web: bool = IS_WEB) -> str:
         f"  Ctrl+Z needed. The program always returns to this prompt.\n"
     ) if not web else ""
 
+    submitting_input_section = (
+        f"  SUBMITTING INPUT\n"
+        f"  ----------------\n"
+        f"  Multi-line schedule input: press Ctrl+Z then Enter (Windows)\n"
+        f"  or Ctrl+D (Mac/Linux) to submit. Submit empty input to exit.\n"
+        f"{submitting_input_commands}"
+    ) if not web else ""
+
     return (
         f"{rule}\n"
         f"  ADI SCHEDULE FORMATTER\n"
@@ -975,11 +983,7 @@ def startup_banner(web: bool = IS_WEB) -> str:
         f"       **      line-level: applies * to every time on the line\n"
         f"       #       previously booked lesson\n"
         f"\n"
-        f"  SUBMITTING INPUT\n"
-        f"  ----------------\n"
-        f"  Multi-line schedule input: press Ctrl+Z then Enter (Windows)\n"
-        f"  or Ctrl+D (Mac/Linux) to submit. Submit empty input to exit.\n"
-        f"{submitting_input_commands}"
+        f"{submitting_input_section}"
         f"\n"
         f"{rule}\n"
         f"  MODE 1 - SHORTHAND INPUT EXAMPLE\n"
