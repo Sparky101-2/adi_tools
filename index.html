@@ -1,1 +1,87 @@
-fetch("adi_schedule_formatter.py")
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADI Schedule Formatter</title>
+<style>
+  :root { --bg:#0f1720; --panel:#161f2b; --ink:#e6edf3; --mut:#8b9bb0;
+          --accent:#4c9aff; --ok:#2ea043; --line:#26313f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:820px; margin:0 auto; padding:20px; }
+  label { display:block; font-size:13px; color:var(--mut); margin:0 0 6px; }
+  textarea { width:100%; min-height:150px; resize:vertical; padding:12px;
+             background:var(--panel); color:var(--ink); border:1px solid var(--line);
+             border-radius:8px; font:15px/1.5 ui-monospace,Menlo,Consolas,monospace; }
+  .row { display:flex; gap:10px; align-items:center; margin:12px 0; flex-wrap:wrap; }
+  button { background:var(--accent); color:#fff; border:0; padding:10px 18px;
+           border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; }
+  button.sec { background:transparent; border:1px solid var(--line); color:var(--ink); }
+  button:disabled { opacity:.5; cursor:default; }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+        padding:14px; overflow:auto; font:13px/1.45 ui-monospace,Menlo,Consolas,monospace; }
+  /* Banner: scrollable, capped at one third of the window height. */
+  #banner { max-height:33vh; white-space:pre; margin:0 0 18px; color:var(--mut); }
+  #out { white-space:pre-wrap; word-break:break-word; min-height:60px; margin-top:6px; }
+  .status { font-size:13px; color:var(--mut); }
+  .status.ready { color:var(--ok); }
+</style>
+</head>
+<body>
+<main>
+  <pre id="banner">Loading…</pre>
+
+  <label for="in">Your input (e.g. 3112 10-1130, 14*  or  TD 0408)</label>
+  <textarea id="in" spellcheck="false"></textarea>
+  <div class="row">
+    <button id="run" disabled>Format</button>
+    <button id="copy" class="sec">Copy output</button>
+    <label style="margin:0"><input type="checkbox" id="desc"> Sort descending</label>
+    <span id="status" class="status">Starting Python…</span>
+  </div>
+  <label>Output</label>
+  <pre id="out"></pre>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let py = null;
+
+async function boot() {
+  py = await loadPyodide();
+  const src = await (await fetch("adi_schedule_formatter.py")).text();
+  py.FS.writeFile("adi_schedule_formatter.py", src);
+  py.runPython("import adi_schedule_formatter as adi");
+  try { $("banner").textContent = py.runPython("adi.startup_banner()"); }
+  catch (e) { $("banner").textContent = "(banner unavailable)"; }
+  $("run").disabled = false;
+  $("status").textContent = "Ready";
+  $("status").className = "status ready";
+}
+
+function format() {
+  if (!py) return;
+  py.globals.set("_t", $("in").value);
+  py.globals.set("_o", $("desc").checked ? "desc" : "asc");
+  let result;
+  try { result = py.runPython("adi.process_input(_t, order=_o)"); }
+  catch (e) { result = "Error:\n" + (e.message || e); }
+  $("out").textContent = result || "(no output)";
+}
+
+$("run").addEventListener("click", format);
+$("in").addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); format(); }
+});
+$("copy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("out").textContent);
+  $("copy").textContent = "Copied!";
+  setTimeout(() => $("copy").textContent = "Copy output", 1200);
+});
+boot();
+</script>
+</body>
+</html>
