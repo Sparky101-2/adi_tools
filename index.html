@@ -38,7 +38,7 @@
   details.guide[open] > summary::before { transform:rotate(90deg); }
   details.guide > summary:hover { color:var(--accent); }
 
-  textarea { width:100%; min-height:150px; resize:vertical; padding:12px;
+  textarea { width:100%; min-height:112px; resize:vertical; padding:12px;
              background:var(--panel); color:var(--ink); border:1px solid var(--line);
              border-radius:8px; font:15px/1.5 ui-monospace,Menlo,Consolas,monospace; }
   .row { display:flex; gap:10px; align-items:center; margin:12px 0; flex-wrap:wrap; }
@@ -51,28 +51,25 @@
   /* Full guide: scrollable inside the open panel, capped so it never dominates. */
   #banner { max-height:50vh; white-space:pre; margin:0; border:0; border-radius:0;
             color:var(--mut); background:transparent; }
-  #out { white-space:pre-wrap; word-break:break-word; min-height:60px; margin-top:6px; }
+  #out { white-space:pre-wrap; word-break:break-word; min-height:188px; margin-top:6px; }
   .status { font-size:13px; color:var(--mut); }
   .status.ready { color:var(--ok); }
 </style>
 </head>
 <body>
 <main>
-  <!-- Tier 1: ultra-high-level description, always visible (startup_banner_short) -->
   <div class="intro" id="intro">
     <h1 id="intro-title">ADI Schedule Formatter</h1>
     <p class="intro-lead" id="intro-lead">Loading…</p>
     <ul id="intro-points"></ul>
   </div>
 
-  <!-- Tier 2: full guide, collapsed by default (startup_banner) -->
   <details class="guide" id="guide">
     <summary>Full guide &amp; examples</summary>
     <pre id="banner">Loading…</pre>
   </details>
 
-  <!-- Tier 3: the tool -->
-  <h1 class="field">Your input (e.g. 3112 10-1130, 14*  or  TD 0408)</h1>
+  <h1 class="field">Your input (e.g. 3112 10-1130, 14* or  TD 0408)</h1>
   <textarea id="in" spellcheck="false"></textarea>
   <div class="row">
     <button id="run" disabled>Format</button>
@@ -88,10 +85,6 @@
 const $ = id => document.getElementById(id);
 let py = null;
 
-// Render the short banner text (from startup_banner_short) into the intro
-// area: first line is the title, the next block is the lead paragraph, and
-// any "  -  Label: text" lines become list items. Python stays the single
-// source of truth for the wording.
 function renderShort(text) {
   const lines = text.split("\n");
   const title = lines.shift() || "ADI Schedule Formatter";
@@ -111,7 +104,6 @@ function renderShort(text) {
   ul.innerHTML = "";
   for (const p of points) {
     const li = document.createElement("li");
-    // Bold the "Label:" prefix if present (e.g. "Efficient Input: ...").
     const colon = p.indexOf(":");
     if (colon > -1 && colon < 40) {
       const strong = document.createElement("strong");
