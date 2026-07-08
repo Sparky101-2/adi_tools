@@ -998,6 +998,28 @@ def process_input(text: str, order: str = "asc", today: date | None = None) -> s
     return render(text, order=order, today=today)
 
 
+def startup_banner_short() -> str:
+    """
+    An ultra-high-level, at-a-glance description of the tool. Intended for
+    the top of the web UI (always visible), with the full startup_banner()
+    tucked into a collapsible section beneath it. Kept deliberately short:
+    what the tool is, one worked example, and three headline capabilities.
+    The full reference lives in startup_banner().
+    """
+    return (
+        "ADI Schedule Formatter\n"
+        "Instantly convert quick shorthand into professional, client-ready "
+        "lesson slots (availability or confirmations). Simply type your dates "
+        "and times (e.g., enter \"3112 10\" for a 10:00–12:00 lesson) and get a "
+        "well-formatted message ready to edit or paste into WhatsApp or SMS.\n"
+        "  -  Efficient Input: The tool defaults to two-hour lessons but "
+        "supports varying lengths (simply enter start and end times).\n"
+        "  -  Batch Capability: Input multiple lesson dates and times in one go.\n"
+        "  -  Extended Features: See the full guide below for more options and "
+        "features."
+    )
+
+
 def startup_banner() -> str:
     """
     The startup message. Identical whether running natively or in the web
@@ -1044,7 +1066,8 @@ def startup_banner() -> str:
         f"  How to enter your dates into the tool:\n"
         f"\n"
         f"  TYPE OR PASTE\n"
-        f"    Enter your dates and times directly as shorthand (format below). Multi-line input is supported.\n"
+        f"    Enter your dates and times directly as shorthand (format below).\n"
+        f"    Multi-line input is supported.\n"
         f"\n"
         f"  FROM A FILE [Native only — not available on web]\n"
         f"    Point the tool at a text file instead of typing:\n"
@@ -1242,7 +1265,17 @@ def selftest() -> bool:
     )
     print("SELF-TEST (Week Number boundary):", "PASS" if boundary_ok else "FAIL")
 
-    return ok and web_ok and td_ok and week_ok and boundary_ok
+    # startup_banner_short self-test: the short banner must start with the
+    # tool name and mention the worked example, and must not be empty.
+    short = startup_banner_short()
+    short_ok = (
+        short.startswith("ADI Schedule Formatter") and
+        "3112 10" in short and
+        "full guide below" in short
+    )
+    print("SELF-TEST (short banner):", "PASS" if short_ok else "FAIL")
+
+    return ok and web_ok and td_ok and week_ok and boundary_ok and short_ok
 
 
 # --------------------------------------------------------------------------- #
