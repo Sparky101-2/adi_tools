@@ -61,8 +61,11 @@ FEATURES DISABLED ON WEB
   Windows interactive mode).
 
 BEHAVIOUR ON WEB
-- The startup banner omits any mention of the above features entirely -
-  it must never advertise a command the user cannot use.
+- The startup banner text is identical on web and native - it is never
+  varied by platform. Native-only features (file input, VER) are still
+  listed, each labelled inline with "[Native only — not available on
+  web]" so the banner never silently advertises something unusable, but
+  it also never hides content per platform.
 - If a disabled command is entered anyway (typed literally, regardless of
   whether the banner mentioned it), it is recognised and rejected with a
   short message explaining it isn't available in this environment. It is
@@ -72,10 +75,9 @@ BEHAVIOUR ON WEB
 
 ON A NEW CHAT (startup message)
 - At the very top of your first reply in any new chat, before anything
-  else, output a banner with: an Executive Summary, all three modes, a
-  MISC FEATURES section, the Time Markup KEY, and the worked examples for
-  both modes. On web, omit Mode 3 and MISC FEATURES per ENVIRONMENT
-  DETECTION above.
+  else, output the startup banner exactly as defined by startup_banner()
+  in the code below - the same text on web and native, per BEHAVIOUR ON
+  WEB above. Do not vary, trim, or re-derive it per platform.
 - Then carry on and handle whatever I've actually asked in that first
   message.
 
@@ -270,6 +272,50 @@ LINE-LEVEL * SHORTHAND
 - If a line contains ** and individual per-slot markers are also present,
   ** takes precedence: all slots on the line are treated as *.
 
+WEEK NUMBER MODE (Mode 1 only)
+- Trigger: the whole word "WEEK" or "WK" (case-insensitive; matched on
+  word boundaries, so "weeks" or "weekday" do NOT trigger it) appearing
+  anywhere at all in the input - its own line, tacked onto a date line,
+  wherever - switches on week-number output for every line in that
+  input block. There is no separate off-keyword; an input that doesn't
+  contain the word is unaffected.
+  Reason: mirrors the free-anywhere placement already used for ASC/DESC,
+  scanning the whole input rather than requiring a dedicated line.
+- Wherever the trigger word is found, it is stripped out (and any extra
+  whitespace it leaves behind collapsed) before that line is parsed, so
+  it never collides with a date or time token - the same treatment
+  already given to the ** line-shorthand marker.
+  Caveat: because detection is a word match anywhere in the input rather
+  than a dedicated directive line, a "week"/"wk" that happens to appear
+  inside an ignored field of a website-export line (Columns 4+, e.g. a
+  customer name) will also switch the whole batch into week-number mode.
+  This is an accepted trade-off of "anywhere in the input" detection.
+- Does not apply to Mode 2 (TD mode). Mode 2 dispatch only ever looks at
+  whether the first line matches "TD DDMM" (see MODE 2 below); a WEEK/WK
+  token has no effect there and is not stripped from Mode 2 input.
+- DEFINITION OF A WEEK NUMBER
+  - Weeks start on Monday.
+  - Week 01 always begins on 1 January of that date's year, regardless
+    of which weekday 1 January falls on. If 1 January is not a Monday,
+    Week 01 is a short/partial week running only from 1 January to the
+    Sunday that follows (inclusive); Week 02 then begins on the next
+    Monday, and every week from there is a full Monday-Sunday block.
+    Example: 1 Jan 2027 is a Friday, so 1-3 Jan 2027 (Fri-Sun) is Week
+    01, and Week 02 begins Mon 4 Jan 2027.
+  - This is deliberately NOT ISO-8601 week numbering, which can push
+    early-January dates into week 52/53 of the *previous* year. Week
+    numbers here are always scoped to the calendar year of the date
+    itself and always restart at 01 on 1 January.
+  - Consequence: the last week of December can come out as week 53 (or
+    54, in a leap year that starts on a Sunday). This is expected, not
+    capped or folded into the next year's Week 01.
+  - Formula: for a date with day-of-year `doy` and `jan1_wd` = the
+    weekday of 1 January that year (Mon=0 .. Sun=6),
+      week = ceil((doy + jan1_wd) / 7)
+- OUTPUT FORMAT: appended to the end of the line, after the time range,
+  as " (Wk NN)" with NN always zero-padded to two digits - e.g.
+  "Mon   01/01 1230-1430 (Wk 01)". No other part of the line changes.
+
 TIME MARKUP KEY
 Always print this key in the startup banner:
 
@@ -349,6 +395,25 @@ Tues  02/06 0900–1100
 Fri   05/06 0900–1100
 ```
 
+EXAMPLE (Week Number Mode)
+EXAMPLE INPUT:
+0107 1230
+1507 11-13
+1707 9-11
+2207 11-13
+wk
+
+EXAMPLE OUTPUT (dates shown assume the year resolves to 2026 per
+Assumption 3 - the week numbers are computed from each date's own year,
+per WEEK NUMBER MODE above):
+Here are the new lesson bookings.
+```
+Wed   01/07 1230–1430 (Wk 27)
+Wed   15/07 1100–1300 (Wk 29)
+Fri   17/07 0900–1100 (Wk 29)
+Wed   22/07 1100–1300 (Wk 30)
+```
+
 ==============================
 MODE 2 – PRACTICAL TEST DATE MODE
 ==============================
@@ -413,6 +478,10 @@ IS_WEB = sys.platform == "emscripten"
 DAY_ABBR = ["Mon", "Tues", "Wed", "Thurs", "Fri", "Sat", "Sun"]
 PAD = max(len(a) for a in DAY_ABBR)   # 5, the width of "Thurs"
 
+# WEEK NUMBER MODE trigger: whole word "WEEK" or "WK", case-insensitive,
+# anywhere in the input (see WEEK NUMBER MODE in the spec above).
+WEEK_TRIGGER_RE = re.compile(r"(?i)\b(?:week|wk)\b")
+
 # Section headers for each marker type (singular and plural).
 SECTION_NEW   = "Here are the new lesson bookings."
 SECTION_NEW_S = "Here is the new lesson booking."
@@ -437,6 +506,18 @@ EXAMPLE_OUTPUT = (
     "```\n"
     "Tues  02/06 0900–1100\n"
     "Fri   05/06 0900–1100\n"
+    "```"
+)
+
+# Week Number Mode example (see EXAMPLE (Week Number Mode) in the spec above).
+WEEK_EXAMPLE_INPUT = "0107 1230\n1507 11-13\n1707 9-11\n2207 11-13\nwk"
+WEEK_EXAMPLE_OUTPUT = (
+    "Here are the new lesson bookings.\n"
+    "```\n"
+    "Wed   01/07 1230–1430 (Wk 27)\n"
+    "Wed   15/07 1100–1300 (Wk 29)\n"
+    "Fri   17/07 0900–1100 (Wk 29)\n"
+    "Wed   22/07 1100–1300 (Wk 30)\n"
     "```"
 )
 
@@ -487,6 +568,18 @@ TD_EXAMPLE_OUTPUT = (
 def to_hhmm(minutes: int) -> str:
     """Minutes-since-midnight -> 4-digit HHMM string (Output format)."""
     return f"{minutes // 60:02d}{minutes % 60:02d}"
+
+
+def week_number(d: date) -> int:
+    """
+    WEEK NUMBER MODE: Monday-start week number, scoped to d's own calendar
+    year. Week 01 always begins 1 January regardless of weekday (so it may
+    be a short week); every later week is a full Monday-Sunday block.
+    Deliberately not ISO-8601 (see WEEK NUMBER MODE in the module spec).
+    """
+    jan1_weekday = date(d.year, 1, 1).weekday()   # Mon=0 .. Sun=6
+    doy = d.timetuple().tm_yday
+    return (doy + jan1_weekday + 6) // 7
 
 
 def next_occurrence(day: int, month: int, today: date) -> date:
@@ -721,11 +814,17 @@ def resolve_range(chunk: str) -> Slot:
 # --------------------------------------------------------------------------- #
 # Output formatting
 # --------------------------------------------------------------------------- #
-def format_line(when: date, slot: Slot) -> str:
-    """Builds one padded output line (date + times, no suffix)."""
+def format_line(when: date, slot: Slot, week_mode: bool = False) -> str:
+    """
+    Builds one padded output line (date + times). When week_mode is set
+    (WEEK NUMBER MODE), appends " (Wk NN)" using week_number(when).
+    """
     abbr = DAY_ABBR[when.weekday()].ljust(PAD)
     times = f"{to_hhmm(slot.start)}–{to_hhmm(slot.end)}"
-    return f"{abbr} {when.day:02d}/{when.month:02d} {times}"
+    line = f"{abbr} {when.day:02d}/{when.month:02d} {times}"
+    if week_mode:
+        line += f" (Wk {week_number(when):02d})"
+    return line
 
 
 # --------------------------------------------------------------------------- #
@@ -781,8 +880,13 @@ def format_schedule(
     Processes the whole input and returns (no_marker_lines, star_lines,
     hash_lines, notes). A bare line of 'ASC' or 'DESC' anywhere in the
     input sets the sort order (applied within each section independently).
+    WEEK NUMBER MODE: if the whole word "WEEK" or "WK" appears anywhere in
+    the input, every output line gets a " (Wk NN)" suffix (see WEEK NUMBER
+    MODE in the module spec). The trigger word is stripped from wherever
+    it appears before that line is otherwise parsed.
     """
     today = today or date.today()
+    week_mode = bool(WEEK_TRIGGER_RE.search(text))
     no_marker_rows: list[tuple[date, int, str]] = []
     star_rows:      list[tuple[date, int, str]] = []
     hash_rows:      list[tuple[date, int, str]] = []
@@ -790,6 +894,10 @@ def format_schedule(
 
     for raw in text.splitlines():
         line = raw.strip()
+        if not line:
+            continue
+        line = WEEK_TRIGGER_RE.sub("", line)
+        line = re.sub(r"  +", " ", line).strip()
         if not line:
             continue
         if line.upper() == "DESC":
@@ -834,7 +942,7 @@ def format_schedule(
                 continue
             if slot.note:
                 notes.append(f"{date_tok} '{chunk}': {slot.note}")
-            row = (when, slot.start, format_line(when, slot))
+            row = (when, slot.start, format_line(when, slot, week_mode))
             if slot.marker == "*":
                 star_rows.append(row)
             elif slot.marker == "#":
@@ -890,46 +998,15 @@ def process_input(text: str, order: str = "asc", today: date | None = None) -> s
     return render(text, order=order, today=today)
 
 
-def startup_banner(web: bool = IS_WEB) -> str:
+def startup_banner() -> str:
     """
-    The startup message: both modes, file input option, key, and examples.
-    On web (Pyodide), Mode 3 and MISC FEATURES are omitted entirely, since
-    both depend on filesystem/subprocess access that isn't available there
-    (see ENVIRONMENT DETECTION in the module spec).
+    The startup message. Identical whether running natively or in the web
+    (Pyodide) build - see BEHAVIOUR ON WEB in the module spec above. Native-
+    only commands are labelled inline ("[Native only - not available on
+    web]") rather than the banner omitting them per platform.
     """
     rule = "=" * 66
     thin = "-" * 66
-
-    mode3_and_misc = (
-        f"  MODE 3 – FILE INPUT\n"
-        f"  ===================\n"
-        f"  Instead of typing input, reference a text file:\n"
-        f"    TXT_INPUT \"C:\\path\\to\\your\\input.txt\"\n"
-        f"  To open the file for editing first, use TXT_EDIT (same syntax).\n"
-        f"  Omit the path to use the default file:\n"
-        f"    {TXT_INPUT_DEFAULT_PATH}\n"
-        f"  Arrow-key shortcuts at the input prompt:\n"
-        f"    ↑ TXT_INPUT  ↓ TXT_EDIT\n"
-        f"\n"
-        f"  MISC FEATURES\n"
-        f"  =============\n"
-        f"  VER – Type VER at the prompt to display the current git version\n"
-        f"        of this script.\n"
-        f"\n"
-    ) if not web else ""
-
-    submitting_input_commands = (
-        f"  Commands (VER, TXT_INPUT, TXT_EDIT): press Enter only — no\n"
-        f"  Ctrl+Z needed. The program always returns to this prompt.\n"
-    ) if not web else ""
-
-    submitting_input_section = (
-        f"  SUBMITTING INPUT\n"
-        f"  ----------------\n"
-        f"  Multi-line schedule input: press Ctrl+Z then Enter (Windows)\n"
-        f"  or Ctrl+D (Mac/Linux) to submit. Submit empty input to exit.\n"
-        f"{submitting_input_commands}"
-    ) if not web else ""
 
     return (
         f"{rule}\n"
@@ -938,70 +1015,169 @@ def startup_banner(web: bool = IS_WEB) -> str:
         f"\n"
         f"  WHAT THIS TOOL DOES\n"
         f"  ===================\n"
-        f"  Type shorthand date/time input to instantly produce clean,\n"
-        f"  fixed-width output ready to paste into WhatsApp or SMS —\n"
-        f"  saving time, keeping things consistent, and always looking\n"
-        f"  professional to your clients.\n"
+        f"  Turn quick shorthand into tidy, professional lesson schedules you\n"
+        f"  can paste straight into WhatsApp or SMS — clear and consistent for\n"
+        f"  your pupils every time. It can also count back from a pupil's test\n"
+        f"  date so you know when to check in.\n"
         f"\n"
-        f"  The default lesson duration is two hours, so you only need\n"
-        f"  to enter a start time — the system will automatically\n"
-        f"  calculate and append the end time.\n"
+        f"  The default lesson is two hours, so usually you only enter a start\n"
+        f"  time and the end is filled in for you:\n"
         f"\n"
         f"    Input:  3112 10\n"
         f"    Output: Thurs 31/12 1000–1200\n"
         f"\n"
-        f"  Alternatively, specify the end time explicitly:\n"
+        f"  Or give the end time explicitly:\n"
         f"\n"
         f"    Input:  3112 10-1130\n"
         f"    Output: Thurs 31/12 1000–1130\n"
         f"\n"
-        f"  For more usage examples, see the example inputs and outputs\n"
-        f"  below.\n"
+        f"  Fuller worked examples are at the bottom.\n"
         f"\n"
-        f"  MODE 1 – SCHEDULE FORMATTER\n"
-        f"  ===========================\n"
-        f"  Enter lesson dates and times in shorthand format to produce a\n"
-        f"  clean, fixed-width layout ready to paste into WhatsApp or SMS.\n"
-        f"  Note: triple-backticks (```) preserve monospace formatting in\n"
-        f"  WhatsApp.\n"
+        f"{thin}\n"
+        f"  FORMATTING DATE/TIMES\n"
+        f"{thin}\n"
+        f"  The main job: give the tool your lesson dates and times and it\n"
+        f"  lays them out in a clean, fixed-width block ready to paste into\n"
+        f"  WhatsApp or SMS. The triple-backticks (```) around each block\n"
+        f"  preserve the monospace alignment in WhatsApp.\n"
         f"\n"
-        f"  MODE 2 – PRACTICAL TEST DATE MODE\n"
-        f"  ==================================\n"
-        f"  Start your input with \"TD DDMM\" (e.g. TD 0408) to calculate the\n"
-        f"  list of dates 12, 10, 8, 6 and 4 weeks before a practical test\n"
-        f"  date. Useful to setup a future-reminder for yourself to keep in\n"
-        f"  touch with students at these times (in case you think there is a\n"
-        f"  risk that they may not be test ready you may want to offer more\n"
-        f"  lessons...)\n"
+        f"  How to enter your dates into the tool:\n"
         f"\n"
-        f"{mode3_and_misc}"
+        f"  TYPE OR PASTE\n"
+        f"    Enter your dates and times directly as shorthand (format below). Multi-line input is supported.\n"
+        f"\n"
+        f"  FROM A FILE [Native only — not available on web]\n"
+        f"    Point the tool at a text file instead of typing:\n"
+        f"      TXT_INPUT \"C:\\path\\to\\your\\input.txt\"\n"
+        f"    Or open the file for editing first (same syntax):\n"
+        f"      TXT_EDIT \"C:\\path\\to\\your\\input.txt\"\n"
+        f"    Omit the path to use the default file:\n"
+        f"      {TXT_INPUT_DEFAULT_PATH}\n"
+        f"    Arrow-key shortcuts at the prompt:  ↑ TXT_INPUT   ↓ TXT_EDIT\n"
+        f"\n"
+        f"  ENTERING DATES AND TIMES\n"
+        f"    Dates:  DDMM, day first (0406 = 4 June), or with a slash (4/6).\n"
+        f"            No year needed — the next date on or after today is used.\n"
+        f"\n"
+        f"    Times can be written as:\n"
+        f"      9              start time only — becomes a 2-hour lesson\n"
+        f"      9-11  or 9.11  a range (hyphen or full stop mean the same)\n"
+        f"      14:30 or 1430  a time with minutes (both = half past two)\n"
+        f"      1800           a plain 24-hour time, used as given\n"
+        f"\n"
+        f"    12-hour times are resolved automatically against your working\n"
+        f"    day (08:00–20:00):  11-1 → 1100–1300,  2-4 → 1400–1600,\n"
+        f"    9-5 → 0900–1700,  6-8 → 1800–2000.\n"
+        f"\n"
+        f"  PASTING FROM THE RED WEBSITE\n"
+        f"    You can copy rows straight from a pupil's \"Appointment history\"\n"
+        f"    page on the RED site and paste them in as-is, mixed freely with\n"
+        f"    your own shorthand lines in the same block. Those rows carry a\n"
+        f"    full date (DD/MM/YYYY), so past and upcoming lessons stay in true\n"
+        f"    chronological order. Name, postcode and status columns are ignored.\n"
+        f"\n"
+        f"  WEEK NUMBERS   (optional)\n"
+        f"    Put WEEK or WK anywhere in your input (any capitalisation) and\n"
+        f"    every line gets its week number appended, e.g.\n"
+        f"      Wed   01/07 1230–1430 (Wk 27)\n"
+        f"    It's a whole-word trigger, so \"weeks\" or \"weekday\" won't set it\n"
+        f"    off. Applies to typed and file input — not to the test-date\n"
+        f"    countdown.\n"
+        f"\n"
         f"{thin}\n"
         f"  TIME MARKUP KEY\n"
-        f"  ---------------\n"
+        f"{thin}\n"
         f"  [No markup]  new lesson booking\n"
         f"       *       other available lesson times\n"
         f"       **      line-level: applies * to every time on the line\n"
         f"       #       previously booked lesson\n"
         f"\n"
-        f"{submitting_input_section}"
+        f"{thin}\n"
+        f"  TEST-DATE COUNTDOWN\n"
+        f"{thin}\n"
+        f"  Start your input with \"TD DDMM\" (e.g. TD 0408) to list the dates\n"
+        f"  12, 10, 8, 6 and 4 weeks before a pupil's practical test. Handy for\n"
+        f"  setting yourself reminders for when to check in — and to offer\n"
+        f"  extra lessons if you think they might not be test-ready in time.\n"
+        f"\n"
+        f"{thin}\n"
+        f"  USING THE TOOL\n"
+        f"{thin}\n"
+        f"  SUBMITTING INPUT\n"
+        f"    Multi-line schedule input: press Ctrl+Z then Enter (Windows) or\n"
+        f"    Ctrl+D (Mac/Linux) to submit. Submit empty input to exit.\n"
+        f"    Commands (VER, TXT_INPUT, TXT_EDIT): just press Enter — no Ctrl+Z\n"
+        f"    needed. The tool always returns to the prompt afterwards.\n"
+        f"\n"
+        f"  VER   [Native only — not available on web]\n"
+        f"    Type VER at the prompt to show the current git version of the\n"
+        f"    script.\n"
         f"\n"
         f"{rule}\n"
-        f"  MODE 1 - SHORTHAND INPUT EXAMPLE\n"
+        f"  EXAMPLE - FORMATTING DATE/TIMES\n"
         f"{rule}\n"
-        f"INPUT:\n"
-        f"{EXAMPLE_INPUT}\n"
         f"\n"
-        f"OUTPUT:\n"
-        f"{EXAMPLE_OUTPUT}\n"
+        f"  ----------\n"
+        f"  EXAMPLE 1:\n"
+        f"  ----------\n"
+        f"\n"
+        f"  INPUT:\n"
+        f"  0206 9#\n"
+        f"  0306 9, 1430\n"
+        f"  0406 6-8, 9-1030*\n"
+        f"  0506 9#\n"
+        f"\n"
+        f"  OUTPUT:\n"
+        f"  Here are the new lesson bookings.\n"
+        f"  ```\n"
+        f"  Thurs 03/06 0900–1100\n"
+        f"  Thurs 03/06 1430–1630\n"
+        f"  Fri   04/06 1800–2000\n"
+        f"  ```\n"
+        f"  Here is another lesson time that is available.\n"
+        f"  ```\n"
+        f"  Fri   04/06 0900–1030\n"
+        f"  ```\n"
+        f"  For reference, the following lessons are already booked.\n"
+        f"  ```\n"
+        f"  Wed   02/06 0900–1100\n"
+        f"  Sat   05/06 0900–1100\n"
+        f"  ```\n"
+        f"\n"
+        f"  ------------------------------\n"
+        f"  EXAMPLE 2 (with Week Numbers):\n"
+        f"  ------------------------------\n"
+        f"\n"
+        f"  INPUT:\n"
+        f"  0501 11\n"
+        f"  0801 11\n"
+        f"  1301 11\n"
+        f"  0103 11 WK\n"
+        f"\n"
+        f"  OUTPUT:\n"
+        f"  Here are the new lesson bookings.\n"
+        f"  ```\n"
+        f"  Tues  05/01 1100–1300 (Wk 02)\n"
+        f"  Fri   08/01 1100–1300 (Wk 02)\n"
+        f"  Wed   13/01 1100–1300 (Wk 03)\n"
+        f"  Mon   01/03 1100–1300 (Wk 10)\n"
+        f"  ```\n"
         f"\n"
         f"{rule}\n"
-        f"  MODE 2 - TEST DATE EXAMPLE\n"
+        f"  EXAMPLE - TEST-DATE COUNTDOWN\n"
         f"{rule}\n"
-        f"INPUT:\n"
-        f"{TD_EXAMPLE_INPUT}\n"
         f"\n"
-        f"OUTPUT:\n"
-        f"{TD_EXAMPLE_OUTPUT}"
+        f"  INPUT:\n"
+        f"  TD 01/12\n"
+        f"\n"
+        f"  OUTPUT:\n"
+        f"  12 weeks before: Tues 08/09\n"
+        f"  10 weeks before: Tues 22/09\n"
+        f"  8 weeks before: Tues 06/10\n"
+        f"  6 weeks before: Tues 20/10\n"
+        f"  4 weeks before: Tues 03/11\n"
+        f"\n"
+        f"  Test Date: Tues 01/12"
     )
 
 
@@ -1044,7 +1220,29 @@ def selftest() -> bool:
         print("--- produced ---")
         print(td_produced)
 
-    return ok and web_ok and td_ok
+    # Week Number Mode self-test (see EXAMPLE (Week Number Mode) above).
+    week_produced = render(WEEK_EXAMPLE_INPUT, today=fixed_today)
+    week_ok = week_produced == WEEK_EXAMPLE_OUTPUT
+    print("SELF-TEST (Week Number Mode):", "PASS" if week_ok else "FAIL")
+    if not week_ok:
+        print("--- expected ---")
+        print(WEEK_EXAMPLE_OUTPUT)
+        print("--- produced ---")
+        print(week_produced)
+
+    # Week-number boundary check: 1 Jan 2027 is a Friday, so Week 01 is the
+    # short 1-3 Jan span and Week 02 begins Monday 4 Jan (see WEEK NUMBER
+    # MODE in the module spec).
+    boundary_ok = (
+        week_number(date(2027, 1, 1)) == 1 and
+        week_number(date(2027, 1, 3)) == 1 and
+        week_number(date(2027, 1, 4)) == 2 and
+        week_number(date(2027, 1, 10)) == 2 and
+        week_number(date(2027, 1, 11)) == 3
+    )
+    print("SELF-TEST (Week Number boundary):", "PASS" if boundary_ok else "FAIL")
+
+    return ok and web_ok and td_ok and week_ok and boundary_ok
 
 
 # --------------------------------------------------------------------------- #
